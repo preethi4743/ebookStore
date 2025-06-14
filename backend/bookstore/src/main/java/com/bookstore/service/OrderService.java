@@ -1,14 +1,21 @@
 package com.bookstore.service;
 
+import com.bookstore.model.Book;
 import com.bookstore.model.Order;
+import com.bookstore.repository.BookRepository;
 import com.bookstore.repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class OrderService {
+    @Autowired
+    private BookRepository bookRepository;
 
     private final OrderRepository orderRepository;
 
@@ -16,23 +23,40 @@ public class OrderService {
         this.orderRepository = orderRepository;
     }
 
-    public Order placeOrder(Order order) {
+    public Order create(Order order) {
+        if (order.getProductIds() == null || order.getProductIds().isEmpty()) {
+            throw new IllegalArgumentException("productIds must not be null or empty");
+        }
+
+        List<Book> books = bookRepository.findAllById(order.getProductIds());
+        if (books.isEmpty()) {
+            throw new IllegalArgumentException("No valid books found for the given productIds: " + order.getProductIds());
+        }
+
+        double total = books.stream().mapToDouble(Book::getNewPrice).sum();
+        order.setTotalPrice(total);
+
+        order.setCreatedAt(Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant()));
         return orderRepository.save(order);
     }
 
-    public List<Order> getOrdersByEmail(String email) {
-        return orderRepository.findByEmailOrderByCreatedAtDesc(email);
-    }
 
-    public List<Order> getAllOrders() {
-        return orderRepository.findAllByOrderByCreatedAtDesc();
-    }
+    public List<Order> getByEmail(String email) {
 
-    public Optional<Order> getOrderById(String id) {
-        return orderRepository.findById(id);
-    }
+        List<Order> orders = orderRepository.findByEmailOrderByCreatedAtDesc(email);
+        System.out.println("Orders fetched for email:" + email);
+        for (Order order : orders) {
+            System.out.println("Order ID: " + order.getId());
+            System.out.println("Order Price: " + order.getTotalPrice());
+            System.out.println("Order productID: " + order.getProductIds());
+            List<Book> books = bookRepository.findAllById(order.getProductIds());
+            for (Book book : books) {
+                System.out.println("book Title:" + book.getTitle());
+                System.out.println("Price:" + book.getNewPrice());
+            }
+            System.out.println("-----------------");
 
-    public long countOrdersByEmail(String email) {
-        return orderRepository.countByEmail(email);
+        }
+        return orders;
     }
 }

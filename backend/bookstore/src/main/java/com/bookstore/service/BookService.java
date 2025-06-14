@@ -1,46 +1,45 @@
 package com.bookstore.service;
 
+
 import com.bookstore.model.Book;
 import com.bookstore.repository.BookRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class BookService {
 
-    private final BookRepository bookRepository;
+    @Autowired
+    private BookRepository bookRepo;
 
-    public BookService(BookRepository bookRepository) {
-        this.bookRepository = bookRepository;
+    public Book create(Book book) {
+        return bookRepo.save(book);
     }
 
-    public List<Book> getAllBooks() {
-        return bookRepository.findAll();
+    public List<Book> getAll() {
+        return bookRepo.findAll()
+                .stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .toList();
     }
 
-    public Optional<Book> getBookById(String id) {
-        return bookRepository.findById(id);
+    public Book getById(String id) {
+        return bookRepo.findById(id).orElse(null);
     }
 
-    public Book createBook(Book book) {
-        return bookRepository.save(book);
+    public Book update(String id, Book updatedBook) {
+        return bookRepo.findById(id).map(existing -> {
+            updatedBook.setId(id);
+            return bookRepo.save(updatedBook);
+        }).orElse(null);
     }
 
-    public void deleteBook(String id) {
-        bookRepository.deleteById(id);
-    }
-
-    public List<Book> findByCategory(String category) {
-        return bookRepository.findByCategory(category);
-    }
-
-    public List<Book> searchBooksByTitle(String keyword) {
-        return bookRepository.findByTitleContainingIgnoreCase(keyword);
-    }
-
-    public long countTrendingBooks() {
-        return bookRepository.countByTrendingTrue();
+    public boolean delete(String id) {
+        return bookRepo.findById(id).map(existing -> {
+            bookRepo.delete(existing);
+            return true;
+        }).orElse(false);
     }
 }

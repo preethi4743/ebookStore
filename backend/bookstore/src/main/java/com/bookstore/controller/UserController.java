@@ -1,72 +1,46 @@
 package com.bookstore.controller;
 
+import com.bookstore.config.JwtUtil;
 import com.bookstore.model.User;
 import com.bookstore.repository.UserRepository;
-import com.bookstore.service.UserService;
-import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Optional;
-
 @RestController
-@RequestMapping("/api/users")
-@CrossOrigin
+@RequestMapping("/api/user")
 public class UserController {
 
-    private final UserRepository userRepository;
-    private final UserService userService;
+    @Autowired
+    private UserRepository userRepo;
 
-    public UserController(UserRepository userRepository, UserService userService) {
-        this.userRepository = userRepository;
-        this.userService = userService;
-    }
+    @Autowired
+    private JwtUtil jwtUtil;
 
+    @PostMapping("/admin")
+    public ResponseEntity<?> loginAdmin(@RequestBody User loginRequest) {
+        User admin = userRepo.findByUsername(loginRequest.getUsername());
 
-    // Get user info by ID
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getUserById(@PathVariable String id) {
-        Optional<User> user = userService.findById(id);
-        if (user.isPresent()) {
-            User foundUser = user.get();
-            // To avoid sending password in response, you can map to DTO or set password null
-            foundUser.setPassword(null);
-            return ResponseEntity.ok(foundUser);
+        if (admin == null) {
+            return ResponseEntity.status(404).body("Admin not found!");
         }
-        return ResponseEntity.notFound().build();
-    }
-    @GetMapping("/users")
-    public ResponseEntity<?> getAllUsers() {
-        return ResponseEntity.ok(userRepository.findAll());
-    }
 
-
-    // Update user info (you may want to secure this endpoint!)
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable String id, @Valid @RequestBody User user) {
-        Optional<User> existingUser = userService.findById(id);
-        if (existingUser.isEmpty()) {
-            return ResponseEntity.notFound().build();
+        if (!admin.getPassword().equals(loginRequest.getPassword())) {
+            return ResponseEntity.status(401).body("Invalid password!");
         }
-        User userToUpdate = existingUser.get();
 
-        userToUpdate.setUsername(user.getUsername());
-        userToUpdate.setEmail(user.getEmail());
-        if(user.getPassword() != null && !user.getPassword().isEmpty()) {
-            // encode new password
-            userToUpdate.setPassword(user.getPassword());
-        }
-        userToUpdate.setRole(user.getRole());
+        String token = jwtUtil.generateToken(admin.getId(), admin.getUsername(), admin.getRole());
 
-        userService.saveUser(userToUpdate);
-        userToUpdate.setPassword(null);
-        return ResponseEntity.ok(userToUpdate);
-    }
-
-    // Delete user (admin-only typically)
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUser(@PathVariable String id) {
-        userService.deleteUser(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok().body(
+                java.util.Map.of(
+                        "message", "Authentication successful",
+                        "token", token,
+                        "user", java.util.Map.of(
+                                "username", admin.getUsername(),
+                                "role", admin.getRole(),
+                                "name", admin.getUsername()
+                        )
+                )
+        );
     }
 }

@@ -1,8 +1,10 @@
 package com.bookstore.controller;
 
 import com.bookstore.model.Book;
-import com.bookstore.repository.BookRepository;
-import jakarta.validation.Valid;
+import com.bookstore.service.BookService;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,55 +12,45 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/books")
-//@CrossOrigin(origins="http://localhost:5173")
 public class BookController {
 
-    private final BookRepository bookRepository;
+    @Autowired
+    private BookService bookService;
 
-    public BookController(BookRepository bookRepository){
-        this.bookRepository = bookRepository;
+    private boolean isAdmin(HttpServletRequest request) {
+        Claims claims = (Claims) request.getAttribute("adminUser");
+        return claims != null && "admin".equals(claims.get("role"));
     }
 
-    @PostMapping
-    public ResponseEntity<Book> createBook(@Valid @RequestBody Book book){
-        Book saved = bookRepository.save(book);
-        return ResponseEntity.ok(saved);
+    @PostMapping("/create-book")
+    public ResponseEntity<?> createBook(@RequestBody Book book, HttpServletRequest request) {
+        if (!isAdmin(request)) return ResponseEntity.status(403).body("Unauthorized");
+        System.out.println("JWT adminUser claims: " + request.getAttribute("adminUser"));
+
+        return ResponseEntity.ok(bookService.create(book));
     }
 
     @GetMapping
-    public ResponseEntity<List<Book>> getAllBooks(){
-        return ResponseEntity.ok(bookRepository.findAll());
+    public ResponseEntity<List<Book>> getAllBooks() {
+        return ResponseEntity.ok(bookService.getAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Book> getBookById(@PathVariable String id){
-        return bookRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> getBook(@PathVariable String id) {
+        Book book = bookService.getById(id);
+        return book != null ? ResponseEntity.ok(book) : ResponseEntity.status(404).body("Book not found");
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Book> updateBook(@PathVariable String id, @Valid @RequestBody Book book){
-        return bookRepository.findById(id)
-                .map(existing -> {
-                    existing.setTitle(book.getTitle());
-                    existing.setDescription(book.getDescription());
-                    existing.setCategory(book.getCategory());
-                    existing.setTrending(book.isTrending());
-                    existing.setCoverImage(book.getCoverImage());
-                    existing.setOldPrice(book.getOldPrice());
-                    existing.setNewPrice(book.getNewPrice());
-                    Book updated = bookRepository.save(existing);
-                    return ResponseEntity.ok(updated);
-                }).orElse(ResponseEntity.notFound().build());
+    @PutMapping("/edit/{id}")
+    public ResponseEntity<?> updateBook(@PathVariable String id, @RequestBody Book book, HttpServletRequest request) {
+        if (!isAdmin(request)) return ResponseEntity.status(403).body("Unauthorized");
+        Book updated = bookService.update(id, book);
+        return updated != null ? ResponseEntity.ok(updated) : ResponseEntity.status(404).body("Book not found");
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteBook(@PathVariable String id){
-        if(bookRepository.existsById(id)){
-            bookRepository.deleteById(id);
-            return ResponseEntity.ok().build();
-        }
-        return ResponseEntity.notFound().build();
+    public ResponseEntity<?> deleteBook(@PathVariable String id, HttpServletRequest request) {
+        if (!isAdmin(request)) return ResponseEntity.status(403).body("Unauthorized");
+        return bookService.delete(id) ? ResponseEntity.ok("Deleted") : ResponseEntity.status(404).body("Book not found");
     }
 }
